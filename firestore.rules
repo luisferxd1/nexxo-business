@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Reglas para la colección "orders"
+    match /orders/{orderId} {
+      allow read, write: if request.auth != null;
+    }
+    // Reglas para la colección "products" (usada por FeaturedProducts.jsx)
+    match /products/{productId} {
+      allow read: if true; // Permitir lectura pública
+      allow write: if request.auth != null && request.auth.token.admin == true; // Solo admins pueden escribir
+    }
+    // Reglas para la colección "categories" (usada por Categories.jsx)
+    match /categories/{categoryId} {
+      allow read: if true; // Permitir lectura pública
+      allow write: if request.auth != null && request.auth.token.admin == true; // Solo admins pueden escribir
+    }
+    // Reglas para la colección "users" (usada por Header.jsx y AuthContext.jsx)
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId; // Solo el usuario puede leer/escribir su propio documento
+    }
+    // Reglas para la colección "notifications" (usada por Header.jsx)
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId; // Solo el usuario puede leer sus notificaciones
+      allow write: if request.auth != null && request.auth.token.admin == true; // Solo admins pueden escribir
+    }
+  }
+}
