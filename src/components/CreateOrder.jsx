@@ -1,4 +1,3 @@
-// src/components/CreateOrder.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db, auth } from '../firebase';
@@ -97,6 +96,16 @@ export default function CreateOrder() {
           createdAt: new Date().toISOString(),
         });
       }
+
+      // Generar notificación para el cliente
+      await addDoc(collection(db, "notifications"), {
+        userId: user.uid,
+        type: 'order_created',
+        message: `Tu pedido #${orderId} ha sido creado con éxito`,
+        orderId: orderId,
+        read: false,
+        createdAt: new Date().toISOString(),
+      });
 
       alert("Pedido creado con éxito.");
       navigate('/track-order');

@@ -1,4 +1,3 @@
-// src/components/CTA.jsx
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
@@ -9,47 +8,74 @@ export default function CTA() {
   const navigate = useNavigate();
   const { user, userRole, loading } = useAuth();
   const [userStatus, setUserStatus] = useState(null);
+  const [fetchError, setFetchError] = useState(null);
 
+  // Obtener el estado del usuario desde Firestore
   useEffect(() => {
     if (loading || !user) return;
 
     const fetchUserStatus = async () => {
-      const userDocRef = doc(db, 'users', user.uid);
-      const userDoc = await getDoc(userDocRef);
-      if (userDoc.exists()) {
-        setUserStatus(userDoc.data().status || null);
+      try {
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
+          setUserStatus(userDoc.data().status || null);
+        } else {
+          setFetchError('No se encontró el perfil del usuario.');
+        }
+      } catch (error) {
+        console.error('Error al obtener el estado del usuario:', error);
+        setFetchError('Error al cargar los datos del usuario.');
       }
     };
 
     fetchUserStatus();
   }, [user, loading]);
 
-  if (loading) {
-    return <div className="text-center text-gray-600">Cargando...</div>;
+  // Mostrar un indicador de carga mientras se obtienen los datos
+  if (loading || (user && userStatus === null && !fetchError)) {
+    return (
+      <section className="bg-custom-blue text-white py-6 px-4 text-center shadow-lg rounded-tl-2xl rounded-tr-2xl">
+        <p className="text-sm md:text-base">Cargando...</p>
+      </section>
+    );
   }
 
+  // Mostrar un mensaje de error si falla la consulta
+  if (fetchError) {
+    return (
+      <section className="bg-custom-blue text-white py-6 px-4 text-center shadow-lg rounded-tl-2xl rounded-tr-2xl">
+        <p className="text-sm md:text-base">{fetchError}</p>
+      </section>
+    );
+  }
+
+  // Determinar si se debe mostrar el botón de "Vender"
   const showSellButton = !userRole || userRole === 'business';
 
   return (
-    <section className="bg-custom-blue text-white p-8 text-center shadow-lg rounded-tl-2xl rounded-tr-2xl">
-      <h2 className="text-3xl font-bold mb-4">¿Listo para vender con nosotros?</h2>
+    <section className="bg-custom-blue text-white py-6 px-4 md:py-10 md:px-8 text-center shadow-lg rounded-tl-2xl rounded-tr-2xl">
+      <h2 className="text-xl md:text-3xl font-bold mb-4 md:mb-6">
+        ¿Listo para vender con nosotros?
+      </h2>
+
       {userRole === 'business' ? (
         userStatus === 'pending' ? (
-          <p className="text-sm">
+          <p className="text-xs md:text-sm max-w-md mx-auto">
             Tu solicitud de negocio está en revisión.{' '}
-            <a href="/contact" className="underline">
+            <a href="/contact" className="underline hover:text-gray-200">
               Contacta al soporte
             </a>{' '}
             para más información.
           </p>
         ) : userStatus === 'verified' ? (
-          <div>
-            <p className="text-sm mb-4">
+          <div className="flex flex-col items-center gap-4">
+            <p className="text-xs md:text-sm max-w-md mx-auto">
               ¡Ya eres un negocio verificado! Administra tus productos desde tu panel.
             </p>
             <button
               onClick={() => navigate('/business')}
-              className="bg-white text-blue-500 px-6 py-3 rounded-2xl font-semibold hover:bg-gray-100 transition-colors"
+              className="bg-white text-custom-blue px-4 py-2 md:px-6 md:py-3 rounded-2xl font-semibold hover:bg-gray-100 transition-colors text-sm md:text-base"
             >
               Ir al Panel de Negocio
             </button>
@@ -58,14 +84,14 @@ export default function CTA() {
       ) : showSellButton ? (
         <button
           onClick={() => navigate('/role-selection')}
-          className="bg-white text-custom-blue px-6 py-3 rounded-2xl font-semibold hover:bg-gray-100 transition-colors"
+          className="bg-white text-custom-blue px-4 py-2 md:px-6 md:py-3 rounded-2xl font-semibold hover:bg-gray-100 transition-colors text-sm md:text-base"
         >
           Vender en NEXXO
         </button>
       ) : (
-        <p className="text-sm">
+        <p className="text-xs md:text-sm max-w-md mx-auto">
           Ya eres un cliente. Si deseas vender, por favor{' '}
-          <a href="/contact" className="underline">
+          <a href="/contact" className="underline hover:text-gray-200">
             contacta al soporte
           </a>{' '}
           para cambiar tu rol.
@@ -74,26 +100,3 @@ export default function CTA() {
     </section>
   );
 }
-
-/*
-Notas Adicionales:
-1. **Estilos Conservados**:
-   - Contenedor: `bg-blue-500 text-white p-8 text-center rounded-2xl shadow-lg`
-   - Título: `text-3xl font-bold mb-4`
-   - Botones: `bg-white text-blue-500 px-6 py-3 rounded-2xl font-semibold hover:bg-gray-100 transition-colors`
-   - Mensajes: `text-sm` para el texto pequeño, y `underline` para los enlaces.
-
-2. **Funcionalidades Añadidas**:
-   - Obtiene el estado del usuario (`status`) desde Firestore para mostrar mensajes condicionales.
-   - Muestra mensajes personalizados según el rol y estado del usuario.
-   - Incluye un enlace para contactar al soporte en los mensajes relevantes.
-
-3. **Verificación**:
-   - Si los estilos no coinciden exactamente con lo que esperas, verifica si hay estilos globales en `index.css` o `App.css` que podrían estar afectando.
-   - Asegúrate de que las clases de Tailwind (`bg-blue-500`, `text-blue-500`, etc.) estén disponibles en tu configuración de `tailwind.config.js`.
-
-4. **Próximos Pasos**:
-   - **Historial de Pedidos**: Guardar un historial de pedidos en Firestore al hacer clic en "Pagar".
-   - **Panel de Administrador**: Crear un panel para aprobar/rechazar solicitudes de negocio.
-   - **Filtros Adicionales**: Añadir filtros por precio o categoría en `FeaturedProducts.jsx`.
-*/

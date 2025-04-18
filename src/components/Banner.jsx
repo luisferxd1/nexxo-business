@@ -26,18 +26,19 @@ export default function Banner() {
     <motion.div
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-gradient-to-r from-custom-blue to-custom-cyan rounded-2xl p-8 text-white text-center shadow-xl"
+      className="bg-custom-blue rounded-3xl p-4 md:p-6 text-white text-center shadow-2xl"
     >
-      <h2 className="text-3xl font-bold mb-4">Conecta con tu negocio local favorito y recibe en tu puerta</h2>
+      <h4 className="text-xl text-justify-center md:text-3xl font-bold mb-2 md:mb-4">Conecta con tu negocio local favorito y recibe en tu puerta</h4>
       <div className="flex justify-center gap-2">
         <Input
           placeholder="¿Qué estás buscando hoy?"
-          className="w-[600px] max-w-full text-gray-800"
+          className="w-full max-w-[400px] md:max-w-[600px]  text-gray-800 text-sm md:text-base rounded-3xl"
+          style={{ borderRadius: '16px' }}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           onKeyDown={handleSearch}
         />
-        <Button onClick={handleButtonSearch}>
+        <Button onClick={handleButtonSearch} className="p-2 bg-blue rounded-3xl" style={{ borderRadius: '9999px' }}>
           <Search className="w-4 h-4" />
         </Button>
       </div>

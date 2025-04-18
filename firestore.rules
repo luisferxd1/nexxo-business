@@ -1,28 +1,185 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Función para verificar si el usuario es admin
+    function isAdmin() {
+      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    // Función para verificar si el usuario es business
+    function isBusiness() {
+      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "business";
+    }
+
+    // Función para verificar si el usuario es client
+    function isClient() {
+      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "client";
+    }
+
+    // Función para verificar si el usuario es repartidor
+    function isDeliveryPerson() {
+      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "deliveryPerson";
+    }
+
+    // Función para verificar si el documento pertenece a un negocio
+    function isBusinessDocument() {
+      return resource.data.role == "business" && resource.data.status == "verified";
+    }
+
+    // Función para verificar si el usuario es participante del chat basado en el chatId
+    function isChatParticipantById(chatId) {
+      return request.auth != null && (
+        chatId.split('_')[0] == request.auth.uid || 
+        chatId.split('_')[1] == request.auth.uid
+      );
+    }
+
+    // Función para verificar si el usuario es participante basándose en los datos del documento
+    function isChatParticipantByData() {
+      return request.auth != null && request.auth.uid in resource.data.participants;
+    }
+
+    // Reglas para la colección "chats"
+    match /chats/{chatId} {
+      allow read, write: if isChatParticipantById(chatId) || isChatParticipantByData();
+      allow read: if request.auth != null && request.query.where['participants'] == 'array-contains' && request.query.where['value'] == request.auth.uid;
+      allow read, write: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if isChatParticipantById(chatId) || isChatParticipantByData();
+        allow read: if isAdmin();
+        allow create: if request.auth != null && (
+          (isBusiness() || isClient()) &&
+          request.resource.data.senderId == request.auth.uid &&
+          (request.resource.data.senderRole == 'business' || request.resource.data.senderRole == 'client') &&
+          request.resource.data.receiverId != request.auth.uid
+        );
+        allow update, delete: if false;
+        allow write: if isAdmin();
+      }
+    }
+
     // Reglas para la colección "orders"
     match /orders/{orderId} {
-      allow read, write: if request.auth != null;
+      // Lectura: Negocios, clientes, repartidores asignados y admins
+      allow read: if isBusiness() && existsBusinessItem();
+      allow read: if isClient() && resource.data.customerId == request.auth.uid;
+      allow read: if isDeliveryPerson() && resource.data.deliveryPersonId == request.auth.uid;
+      allow read: if isAdmin();
+      // Permitir consultas para repartidores con filtros en deliveryPersonId y status
+      allow read: if isDeliveryPerson() &&
+                   'deliveryPersonId' in request.query.where &&
+                   request.query.where['deliveryPersonId'] == request.auth.uid &&
+                   ('status' in request.query.where || 'status[]' in request.query.where);
+
+      // Creación: Solo clientes pueden crear pedidos
+      allow create: if isClient() && request.resource.data.customerId == request.auth.uid;
+
+      // Actualización: Negocios, clientes, repartidores asignados y admins
+      allow update: if (isClient() && resource.data.customerId == request.auth.uid) ||
+                     (isBusiness() && existsBusinessItem()) ||
+                     (isDeliveryPerson() && resource.data.deliveryPersonId == request.auth.uid &&
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'deliveredAt', 'deliveryPersonId'])) ||
+                     isAdmin();
+
+      // Eliminación: Solo admins
+      allow delete: if isAdmin();
+
+      function existsBusinessItem() {
+        return resource.data.businessIds != null && 'businessIds' in resource.data && request.auth.uid in resource.data.businessIds;
+      }
     }
-    // Reglas para la colección "products" (usada por FeaturedProducts.jsx)
+
+    // Reglas para la colección "products"
     match /products/{productId} {
-      allow read: if true; // Permitir lectura pública
-      allow write: if request.auth != null && request.auth.token.admin == true; // Solo admins pueden escribir
+      allow read: if true;
+      allow create: if request.auth != null && (
+        isAdmin() ||
+        (isBusiness() && request.resource.data.businessId == request.auth.uid)
+      );
+      allow update: if request.auth != null && (
+        isAdmin() ||
+        (isBusiness() && 
+         resource.data.businessId == request.auth.uid && 
+         request.resource.data.businessId == resource.data.businessId)
+      );
+      allow delete: if request.auth != null && (
+        isAdmin() ||
+        (isBusiness() && resource.data.businessId == request.auth.uid)
+      );
     }
-    // Reglas para la colección "categories" (usada por Categories.jsx)
+
+    // Reglas para la colección "categories"
     match /categories/{categoryId} {
-      allow read: if true; // Permitir lectura pública
-      allow write: if request.auth != null && request.auth.token.admin == true; // Solo admins pueden escribir
+      allow read: if true;
+      allow write: if isAdmin();
     }
-    // Reglas para la colección "users" (usada por Header.jsx y AuthContext.jsx)
+
+    // Reglas para la colección "users"
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId; // Solo el usuario puede leer/escribir su propio documento
+      // Lectura: Propio usuario, admins, negocios (para ver clientes), clientes (para ver negocios verificados), repartidores
+      allow read: if request.auth != null && (
+        request.auth.uid == userId || // Propio usuario (sin depender de isDeliveryPerson)
+        isAdmin() || // Admins
+        (isBusiness() && resource.data.role == 'client') || // Negocios pueden ver clientes
+        (isClient() && isBusinessDocument()) || // Clientes pueden ver negocios verificados
+        (isDeliveryPerson() && (resource.data.role == 'client' || resource.data.role == 'business')) || // Repartidores pueden ver clientes y negocios
+        (isBusiness() && resource.data.role == 'deliveryPerson' && resource.data.availability == true) // Negocios pueden ver repartidores disponibles
+      );
+
+      // Consultas específicas para roles
+      allow read: if request.auth != null && (
+        request.query.where['role'] == 'business' && request.query.where['status'] == 'verified' || 
+        request.query.where['role'] == 'admin' ||
+        (request.query.where['role'] == 'deliveryPerson' && request.query.where['availability'] == true && isBusiness())
+      );
+
+      // Escritura: Solo el propio usuario o admins
+      allow write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+
+      // Actualización para repartidores: Solo ciertos campos
+      allow update: if request.auth != null && 
+                    request.auth.uid == userId && 
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'location', 'locationUpdatedAt', 'name', 'phone', 'profileImage', 'licenseURL', 'available', 'deliveryInfo', 'profileComplete']);
     }
-    // Reglas para la colección "notifications" (usada por Header.jsx)
+
+    // Reglas para la colección "notifications"
     match /notifications/{notificationId} {
-      allow read: if request.auth != null && request.auth.uid == resource.data.userId; // Solo el usuario puede leer sus notificaciones
-      allow write: if request.auth != null && request.auth.token.admin == true; // Solo admins pueden escribir
+      allow read: if request.auth != null && (request.auth.uid == resource.data.userId || isAdmin());
+      allow create: if request.auth != null && (
+        isAdmin() || 
+        isBusiness() || 
+        isClient() || 
+        isDeliveryPerson()
+      ) && (
+        request.resource.data.type == 'business' || 
+        request.resource.data.type == 'admin' || 
+        request.resource.data.type == 'client' || 
+        request.resource.data.type == 'delivery' || 
+        request.resource.data.type == 'custom' || 
+        request.resource.data.type == 'success' || 
+        request.resource.data.type == 'error'
+      );
+      allow update: if request.auth != null && (
+        (request.auth.uid == resource.data.userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])) || 
+        isAdmin()
+      );
+      allow delete: if request.auth != null && (request.auth.uid == resource.data.userId || isAdmin());
+    }
+
+    // Reglas para la colección "reviews"
+    match /reviews/{reviewId} {
+      allow read: if request.auth != null && (
+        (isClient() && resource.data.customerId == request.auth.uid) ||
+        (isBusiness() && resource.data.businessId == request.auth.uid) ||
+        isAdmin()
+      );
+      allow create: if request.auth != null && isClient() &&
+                    request.resource.data.customerId == request.auth.uid &&
+                    exists(/databases/$(database)/documents/orders/$(request.resource.data.orderId)) &&
+                    get(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.customerId == request.auth.uid &&
+                    get(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.status == "delivered";
+      allow update, delete: if request.auth != null && (isClient() && resource.data.customerId == request.auth.uid) || isAdmin();
     }
   }
 }

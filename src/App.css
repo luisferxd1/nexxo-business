@@ -14,7 +14,7 @@
 }
 
 .App-header {
-  background-color: #282c34;
+  background-color: #ffffff;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -25,7 +25,7 @@
 }
 
 .App-link {
-  color: #61dafb;
+  color: #ffffff;
 }
 
 @keyframes App-logo-spin {
@@ -34,5 +34,35 @@
   }
   to {
     transform: rotate(360deg);
+  }
+}
+/* src/index.css o src/App.css */
+
+/* Asegurarse de que la barra de desplazamiento esté oculta */
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge */
+}
+
+/* Centrar los pasos en móviles */
+.centered-steps {
+  display: flex;
+  position: relative;
+}
+
+/* Añadir espacio a los lados en móviles para centrar los pasos */
+@media (max-width: 767px) { /* Antes de md (768px) */
+  .centered-steps::before,
+  .centered-steps::after {
+    content: '';
+    flex: 0 0 calc((100% - 72px - 4px) / 2); /* (ancho de la pantalla - ancho total de los pasos - espaciado) / 2 */
+    min-width: 0;
+  }
+}
+
+/* Ajustar el espacio en pantallas sm (640px) */
+@media (min-width: 640px) and (max-width: 767px) {
+  .centered-steps::before,
+  .centered-steps::after {
+    flex: 0 0 calc((100% - 84px - 4px) / 2); /* (ancho de la pantalla - ancho total de los pasos - espaciado) / 2 */
   }
 }
